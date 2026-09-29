@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NFC Card Scanner</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+      color: #111;
+    }
+
+    .app {
+      max-width: 700px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 5px;
+    }
+
+    .status {
+      padding: 14px;
+      border-radius: 10px;
+      background: white;
+      margin: 15px 0;
+      font-weight: 600;
+    }
+
+    .counter {
+      font-size: 42px;
+      font-weight: 800;
+      text-align: center;
+      margin: 20px 0;
+    }
+
+    .last {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 15px;
+    }
+
+    .last-id {
+      font-family: monospace;
+      font-size: 28px;
+      font-weight: bold;
+      word-break: break-all;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      margin: 5px 0;
+      border: 0;
+      border-radius: 10px;
+      font-size: 17px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .start { background: #111; color: white; }
+    .export { background: #167c3a; color: white; }
+    .undo { background: #ddd; }
+    .clear { background: #b3261e; color: white; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      margin-top: 20px;
+    }
+
+    th, td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    td.uid {
+      font-family: monospace;
+      font-weight: 700;
+    }
+
+    .duplicate {
+      background: #fff3cd;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="app">
+
+  <h1>NFC Card Scanner</h1>
+  <div>Batch UID / serial-number logger</div>
+
+  <div id="status" class="status">
+    Press Start Scanning
+  </div>
+
+  <button class="start" onclick="startNFC()">
+    Start Scanning
+  </button>
+
+  <div class="counter">
+    <span id="count">0</span>
+  </div>
+
+  <div class="last">
+    Last card
+    <div id="lastId" class="last-id">—</div>
+  </div>
+
+  <button class="export" onclick="exportCSV()">
+    Export CSV
+  </button>
+
+  <button class="undo" onclick="undoLast()">
+    Undo Last Scan
+  </button>
+
+  <button class="clear" onclick="clearAll()">
+    Clear All
+  </button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Time</th>
+        <th>Serial number</th>
+      </tr>
+    </thead>
+
+    <tbody id="tableBody"></tbody>
+  </table>
+
+</div>
+
+<script>
+
+let cards = JSON.parse(localStorage.getItem("nfcCards") || "[]");
+let scanning = false;
+
+
+// -----------------------------
+// DISPLAY
+// -----------------------------
+
+function render() {
+
+  document.getElementById("count").textContent = cards.length;
+
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
+
+  cards.forEach((card, index) => {
+
+    const row = document.createElement("tr");
+
+    row.innerHTML = `
+      <td>${index + 1}</td>
+      <td>${card.time}</td>
+      <td class="uid">${card.uid}</td>
+    `;
+
+    tbody.appendChild(row);
+  });
+
+  if (cards.length) {
+    document.getElementById("lastId").textContent =
+      cards[cards.length - 1].uid;
+  } else {
+    document.getElementById("lastId").textContent = "—";
+  }
+}
+
+
+// -----------------------------
+// SAVE
+// -----------------------------
+
+function save() {
+  localStorage.setItem("nfcCards", JSON.stringify(cards));
+  render();
+}
+
+
+// -----------------------------
+// NFC
+// -----------------------------
+
+async function startNFC() {
+
+  if (!("NDEFReader" in window)) {
+
+    document.getElementById("status").textContent =
+      "Web NFC is not supported by this browser.";
+
+    return;
+  }
+
+  if (scanning) return;
+
+  try {
+
+    const reader = new NDEFReader();
+
+    await reader.scan();
+
+    scanning = true;
+
+    document.getElementById("status").textContent =
+      "Scanning active — tap a card";
+
+    reader.addEventListener("readingerror", () => {
+
+      document.getElementById("status").textContent =
+        "Card detected but could not be read";
+
+    });
+
+
+    reader.addEventListener("reading", event => {
+
+      /*
+        Web NFC may provide the tag serial number
+        through event.serialNumber.
+
+        Example:
+
+        04:47:8D:22:6A:6E:80
+
+        becomes:
+
+        04478D226A6E80
+      */
+
+      let uid = event.serialNumber || "";
+
+      uid = uid
+        .replace(/:/g, "")
+        .replace(/\s/g, "")
+        .toUpperCase();
+
+
+      if (!uid) {
+
+        document.getElementById("status").textContent =
+          "Card detected, but browser did not expose a serial number";
+
+        return;
+      }
+
+
+      // DUPLICATE CHECK
+
+      const duplicate = cards.some(
+        card => card.uid === uid
+      );
+
+
+      if (duplicate) {
+
+        document.getElementById("status").textContent =
+          "Duplicate card: " + uid;
+
+        if (navigator.vibrate)
+          navigator.vibrate([100, 70, 100]);
+
+        return;
+      }
+
+
+      // TIME
+
+      const now = new Date();
+
+      const time =
+        now.toLocaleDateString() +
+        " " +
+        now.toLocaleTimeString();
+
+
+      // ADD CARD
+
+      cards.push({
+        uid: uid,
+        time: time
+      });
+
+
+      save();
+
+
+      document.getElementById("status").textContent =
+        "Card added: " + uid;
+
+
+      // VIBRATION FEEDBACK
+
+      if (navigator.vibrate)
+        navigator.vibrate(80);
+
+
+      // OPTIONAL BEEP
+
+      beep();
+
+    });
+
+  }
+
+  catch (error) {
+
+    document.getElementById("status").textContent =
+      "NFC error: " + error.message;
+
+  }
+}
+
+
+// -----------------------------
+// BEEP
+// -----------------------------
+
+function beep() {
+
+  try {
+
+    const AudioContext =
+      window.AudioContext ||
+      window.webkitAudioContext;
+
+    const ctx = new AudioContext();
+
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+
+    oscillator.frequency.value = 900;
+
+    gain.gain.value = 0.1;
+
+    oscillator.start();
+
+    setTimeout(() => {
+
+      oscillator.stop();
+      ctx.close();
+
+    }, 100);
+
+  }
+
+  catch (e) {}
+
+}
+
+
+// -----------------------------
+// UNDO
+// -----------------------------
+
+function undoLast() {
+
+  if (!cards.length) return;
+
+  const removed = cards.pop();
+
+  save();
+
+  document.getElementById("status").textContent =
+    "Removed: " + removed.uid;
+}
+
+
+// -----------------------------
+// CLEAR
+// -----------------------------
+
+function clearAll() {
+
+  if (!cards.length) return;
+
+  if (!confirm("Delete all scanned cards?"))
+    return;
+
+  cards = [];
+
+  save();
+
+  document.getElementById("status").textContent =
+    "List cleared";
+}
+
+
+// -----------------------------
+// CSV EXPORT
+// -----------------------------
+
+function exportCSV() {
+
+  if (!cards.length) {
+
+    alert("No cards scanned.");
+    return;
+
+  }
+
+  let csv =
+    "Number,Serial Number,Timestamp\n";
+
+  cards.forEach((card, index) => {
+
+    csv +=
+      `${index + 1},${card.uid},"${card.time}"\n`;
+
+  });
+
+
+  const blob =
+    new Blob(
+      [csv],
+      { type: "text/csv;charset=utf-8;" }
+    );
+
+
+  const url =
+    URL.createObjectURL(blob);
+
+
+  const link =
+    document.createElement("a");
+
+  link.href = url;
+
+  link.download =
+    "nfc_cards_" +
+    new Date()
+      .toISOString()
+      .slice(0,10) +
+    ".csv";
+
+  document.body.appendChild(link);
+
+  link.click();
+
+  link.remove();
+
+  URL.revokeObjectURL(url);
+}
+
+
+// INITIAL DISPLAY
+
+render();
+
+</script>
+
+</body>
+</html>
