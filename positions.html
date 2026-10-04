@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Virtual Warehouse Positions</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --panel: #181c23;
+      --panel-2: #202631;
+      --text: #f5f7fa;
+      --muted: #98a2b3;
+      --accent: #ff7a00;
+      --border: #2c3440;
+      --success: #2e9d62;
+      --danger: #d95050;
+      --warning: #d6a82f;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overscroll-behavior: none;
+    }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      touch-action: none;
+    }
+
+    .app {
+      width: min(100%, 560px);
+      min-height: 100dvh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding:
+        calc(16px + env(safe-area-inset-top))
+        16px
+        calc(14px + env(safe-area-inset-bottom));
+      gap: 14px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .title-wrap {
+      min-width: 0;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: .02em;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: .82rem;
+      margin-top: 3px;
+    }
+
+    .counter {
+      flex: 0 0 auto;
+      color: var(--muted);
+      font-size: .82rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 7px 10px;
+    }
+
+    .viewer {
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .card {
+      width: 100%;
+      background: linear-gradient(180deg, var(--panel), #14181f);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 20px 50px rgba(0,0,0,.3);
+      user-select: none;
+      transition: transform .12s ease, opacity .12s ease;
+    }
+
+    .card.animating {
+      transform: scale(.985);
+      opacity: .78;
+    }
+
+    .labels {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .badge {
+      border-radius: 999px;
+      padding: 7px 11px;
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .badge.category {
+      color: var(--accent);
+    }
+
+    .badge.area {
+      color: #dce3ec;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 56%;
+    }
+
+    .position-name {
+      text-align: center;
+      font-size: clamp(2rem, 10vw, 4.5rem);
+      line-height: 1;
+      font-weight: 950;
+      letter-spacing: -.04em;
+      margin: 12px 0 18px;
+      word-break: break-word;
+    }
+
+    .barcode-shell {
+      background: white;
+      border-radius: 16px;
+      padding: 18px 12px 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow: hidden;
+    }
+
+    #barcode {
+      width: 100%;
+      max-width: 100%;
+      height: 150px;
+    }
+
+    .barcode-value {
+      margin-top: 8px;
+      color: #111;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 800;
+      font-size: 1rem;
+      text-align: center;
+      word-break: break-all;
+    }
+
+    .swipe-help {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      margin-top: 14px;
+      font-size: .78rem;
+      text-align: center;
+    }
+
+    .swipe-help span:nth-child(1) { text-align: left; }
+    .swipe-help span:nth-child(3) { text-align: right; }
+
+    .nav-buttons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .nav-buttons button,
+    .warehouse-buttons button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      font: inherit;
+      font-weight: 750;
+      border-radius: 14px;
+      min-height: 46px;
+      cursor: pointer;
+    }
+
+    .nav-buttons button:active,
+    .warehouse-buttons button:active {
+      transform: scale(.98);
+    }
+
+    .warehouse-selector {
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+
+    .warehouse-title {
+      font-size: .78rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      font-weight: 800;
+    }
+
+    .warehouse-buttons {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .warehouse-buttons button {
+      min-height: 54px;
+      padding: 8px;
+      font-size: .88rem;
+    }
+
+    .warehouse-buttons button.active {
+      background: var(--accent);
+      color: #111;
+      border-color: var(--accent);
+    }
+
+    .empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 40px 10px;
+    }
+
+    @media (max-width: 380px) {
+      .app { padding-left: 10px; padding-right: 10px; }
+      .card { padding: 14px; }
+      .warehouse-buttons button { font-size: .78rem; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="title-wrap">
+        <h1 class="title">Virtual Warehouse Position</h1>
+        <div class="hint">Swipe horizontally for type, vertically for position.</div>
+      </div>
+      <div class="counter" id="counter">1 / 4</div>
+    </header>
+
+    <section class="viewer" id="gestureArea">
+      <div class="card" id="card">
+        <div class="labels">
+          <div class="badge category" id="categoryLabel">Missing</div>
+          <div class="badge area" id="warehouseLabel">Medium</div>
+        </div>
+
+        <div class="position-name" id="positionName">MISSING-01</div>
+
+        <div class="barcode-shell">
+          <svg id="barcode"></svg>
+          <div class="barcode-value" id="barcodeValue">MISSING-01</div>
+        </div>
+
+        <div class="swipe-help">
+          <span>← / → category</span>
+          <span>•</span>
+          <span>position ↑ / ↓</span>
+        </div>
+
+        <div class="nav-buttons">
+          <button type="button" id="prevCategory">← Type</button>
+          <button type="button" id="prevPosition">↑ Pos</button>
+          <button type="button" id="nextPosition">↓ Pos</button>
+          <button type="button" id="nextCategory">Type →</button>
+        </div>
+      </div>
+    </section>
+
+    <footer class="warehouse-selector">
+      <div class="warehouse-title">Warehouse type</div>
+      <div class="warehouse-buttons" id="warehouseButtons"></div>
+    </footer>
+  </main>
+
+  <!-- JsBarcode: generates CODE128 barcodes -->
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+
+  <script>
+    /*
+    ==============================================================
+    EASY CONFIGURATION
+    ==============================================================
+
+    You mainly edit this object.
+
+    - Add/remove warehouses inside WAREHOUSES.
+    - Add/remove categories inside each warehouse.
+    - Add/remove positions inside each category.
+    - "label" is what is shown on screen.
+    - "value" is what is encoded into the barcode.
+
+    You can also use simple strings instead of objects:
+      positions: ["MISSING-01", "MISSING-02"]
+
+    In that case the displayed label and barcode value are identical.
+    */
+
+    const WAREHOUSES = [
+      {
+        id: "medium",
+        label: "Medium",
+        categories: [
+          {
+            id: "missing",
+            label: "Missing",
+            positions: [
+              { label: "MISSING 1", value: "MED-MISSING-01" },
+              { label: "MISSING 2", value: "MED-MISSING-02" },
+              { label: "MISSING 3", value: "MED-MISSING-03" },
+              { label: "MISSING 4", value: "MED-MISSING-04" }
+            ]
+          },
+          {
+            id: "damaged",
+            label: "Damaged",
+            positions: [
+              { label: "DAMAGED 1", value: "MED-DAMAGED-01" },
+              { label: "DAMAGED 2", value: "MED-DAMAGED-02" },
+              { label: "DAMAGED 3", value: "MED-DAMAGED-03" },
+              { label: "DAMAGED 4", value: "MED-DAMAGED-04" }
+            ]
+          },
+          {
+            id: "near-expired",
+            label: "Near Expired",
+            positions: [
+              { label: "NEAR EXP 1", value: "MED-NEAREXP-01" },
+              { label: "NEAR EXP 2", value: "MED-NEAREXP-02" },
+              { label: "NEAR EXP 3", value: "MED-NEAREXP-03" },
+              { label: "NEAR EXP 4", value: "MED-NEAREXP-04" }
+            ]
+          }
+        ]
+      },
+
+      {
+        id: "small",
+        label: "Small",
+        categories: [
+          {
+            id: "missing",
+            label: "Missing",
+            positions: [
+              "SML-MISSING-01",
+              "SML-MISSING-02",
+              "SML-MISSING-03",
+              "SML-MISSING-04"
+            ]
+          },
+          {
+            id: "damaged",
+            label: "Damaged",
+            positions: [
+              "SML-DAMAGED-01",
+              "SML-DAMAGED-02",
+              "SML-DAMAGED-03",
+              "SML-DAMAGED-04"
+            ]
+          },
+          {
+            id: "near-expired",
+            label: "Near Expired",
+            positions: [
+              "SML-NEAREXP-01",
+              "SML-NEAREXP-02",
+              "SML-NEAREXP-03",
+              "SML-NEAREXP-04"
+            ]
+          }
+        ]
+      },
+
+      {
+        id: "frozen",
+        label: "Frozen",
+        categories: [
+          {
+            id: "missing",
+            label: "Missing",
+            positions: [
+              "FRZ-MISSING-01",
+              "FRZ-MISSING-02",
+              "FRZ-MISSING-03",
+              "FRZ-MISSING-04"
+            ]
+          },
+          {
+            id: "damaged",
+            label: "Damaged",
+            positions: [
+              "FRZ-DAMAGED-01",
+              "FRZ-DAMAGED-02",
+              "FRZ-DAMAGED-03",
+              "FRZ-DAMAGED-04"
+            ]
+          },
+          {
+            id: "near-expired",
+            label: "Near Expired",
+            positions: [
+              "FRZ-NEAREXP-01",
+              "FRZ-NEAREXP-02",
+              "FRZ-NEAREXP-03",
+              "FRZ-NEAREXP-04"
+            ]
+          }
+        ]
+      }
+    ];
+
+    // --------------------------------------------------------------
+    // App logic below. Normally you do not need to edit this section.
+    // --------------------------------------------------------------
+
+    let warehouseIndex = 0;
+    let categoryIndex = 0;
+    let positionIndex = 0;
+
+    const els = {
+      gestureArea: document.getElementById("gestureArea"),
+      card: document.getElementById("card"),
+      categoryLabel: document.getElementById("categoryLabel"),
+      warehouseLabel: document.getElementById("warehouseLabel"),
+      positionName: document.getElementById("positionName"),
+      barcodeValue: document.getElementById("barcodeValue"),
+      counter: document.getElementById("counter"),
+      warehouseButtons: document.getElementById("warehouseButtons"),
+      prevCategory: document.getElementById("prevCategory"),
+      nextCategory: document.getElementById("nextCategory"),
+      prevPosition: document.getElementById("prevPosition"),
+      nextPosition: document.getElementById("nextPosition")
+    };
+
+    function mod(n, m) {
+      return ((n % m) + m) % m;
+    }
+
+    function getWarehouse() {
+      return WAREHOUSES[warehouseIndex];
+    }
+
+    function getCategories() {
+      return getWarehouse()?.categories || [];
+    }
+
+    function getCategory() {
+      return getCategories()[categoryIndex];
+    }
+
+    function getPositions() {
+      return getCategory()?.positions || [];
+    }
+
+    function normalizePosition(position) {
+      if (typeof position === "string") {
+        return { label: position, value: position };
+      }
+      return {
+        label: position?.label ?? position?.value ?? "UNDEFINED",
+        value: position?.value ?? position?.label ?? "UNDEFINED"
+      };
+    }
+
+    function getCurrentPosition() {
+      return normalizePosition(getPositions()[positionIndex]);
+    }
+
+    function clampIndexes() {
+      if (!WAREHOUSES.length) return;
+
+      warehouseIndex = mod(warehouseIndex, WAREHOUSES.length);
+
+      const categories = getCategories();
+      if (!categories.length) {
+        categoryIndex = 0;
+        positionIndex = 0;
+        return;
+      }
+
+      categoryIndex = mod(categoryIndex, categories.length);
+
+      const positions = getPositions();
+      positionIndex = positions.length ? mod(positionIndex, positions.length) : 0;
+    }
+
+    function animateAndRender() {
+      els.card.classList.add("animating");
+      window.setTimeout(() => {
+        render();
+        els.card.classList.remove("animating");
+      }, 80);
+    }
+
+    function renderWarehouseButtons() {
+      els.warehouseButtons.innerHTML = "";
+
+      WAREHOUSES.forEach((warehouse, index) => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = warehouse.label;
+        btn.classList.toggle("active", index === warehouseIndex);
+
+        btn.addEventListener("click", () => {
+          warehouseIndex = index;
+          categoryIndex = 0;
+          positionIndex = 0;
+          animateAndRender();
+        });
+
+        els.warehouseButtons.appendChild(btn);
+      });
+    }
+
+    function render() {
+      clampIndexes();
+      renderWarehouseButtons();
+
+      const warehouse = getWarehouse();
+      const category = getCategory();
+      const positions = getPositions();
+
+      if (!warehouse || !category || !positions.length) {
+        els.categoryLabel.textContent = category?.label || "No category";
+        els.warehouseLabel.textContent = warehouse?.label || "No warehouse";
+        els.positionName.textContent = "No positions";
+        els.barcodeValue.textContent = "";
+        els.counter.textContent = "0 / 0";
+        document.getElementById("barcode").innerHTML = "";
+        return;
+      }
+
+      const position = getCurrentPosition();
+
+      els.categoryLabel.textContent = category.label;
+      els.warehouseLabel.textContent = warehouse.label;
+      els.positionName.textContent = position.label;
+      els.barcodeValue.textContent = position.value;
+      els.counter.textContent = `${positionIndex + 1} / ${positions.length}`;
+
+      JsBarcode("#barcode", position.value, {
+        format: "CODE128",
+        lineColor: "#000",
+        background: "#fff",
+        width: 2.4,
+        height: 120,
+        displayValue: false,
+        margin: 0
+      });
+    }
+
+    function moveCategory(direction) {
+      const categories = getCategories();
+      if (!categories.length) return;
+
+      categoryIndex = mod(categoryIndex + direction, categories.length);
+      positionIndex = 0;
+      animateAndRender();
+    }
+
+    function movePosition(direction) {
+      const positions = getPositions();
+      if (!positions.length) return;
+
+      positionIndex = mod(positionIndex + direction, positions.length);
+      animateAndRender();
+    }
+
+    els.prevCategory.addEventListener("click", () => moveCategory(-1));
+    els.nextCategory.addEventListener("click", () => moveCategory(1));
+    els.prevPosition.addEventListener("click", () => movePosition(-1));
+    els.nextPosition.addEventListener("click", () => movePosition(1));
+
+    // Swipe handling
+    let startX = 0;
+    let startY = 0;
+    let tracking = false;
+
+    const SWIPE_THRESHOLD = 45;
+
+    function onStart(x, y) {
+      startX = x;
+      startY = y;
+      tracking = true;
+    }
+
+    function onEnd(x, y) {
+      if (!tracking) return;
+      tracking = false;
+
+      const dx = x - startX;
+      const dy = y - startY;
+
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD) return;
+
+      if (Math.abs(dx) > Math.abs(dy)) {
+        // Finger swipe left -> next category
+        // Finger swipe right -> previous category
+        moveCategory(dx < 0 ? 1 : -1);
+      } else {
+        // Finger swipe up -> next position
+        // Finger swipe down -> previous position
+        movePosition(dy < 0 ? 1 : -1);
+      }
+    }
+
+    els.gestureArea.addEventListener("touchstart", (e) => {
+      const t = e.changedTouches[0];
+      onStart(t.clientX, t.clientY);
+    }, { passive: true });
+
+    els.gestureArea.addEventListener("touchend", (e) => {
+      const t = e.changedTouches[0];
+      onEnd(t.clientX, t.clientY);
+    }, { passive: true });
+
+    // Mouse drag support, useful when testing on desktop.
+    els.gestureArea.addEventListener("mousedown", (e) => {
+      onStart(e.clientX, e.clientY);
+    });
+
+    window.addEventListener("mouseup", (e) => {
+      if (tracking) onEnd(e.clientX, e.clientY);
+    });
+
+    // Keyboard support for desktop testing.
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowLeft") moveCategory(-1);
+      if (e.key === "ArrowRight") moveCategory(1);
+      if (e.key === "ArrowUp") movePosition(-1);
+      if (e.key === "ArrowDown") movePosition(1);
+    });
+
+    render();
+  </script>
+</body>
+</html>
