@@ -1,0 +1,16 @@
+{
+  "config_version": 1,
+  "master_enabled": true,
+
+  "rights_management": {
+    "enabled": false
+  },
+
+  "authorizations": {
+    "TD-7F2A91C4": {
+      "enabled": true,
+      "label": "Supervisor PC 1",
+      "expires": null
+    }
+  }
+}

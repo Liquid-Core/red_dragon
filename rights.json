@@ -1,16 +1,17 @@
 {
-  "config_version": 1,
-  "master_enabled": true,
-
-  "rights_management": {
-    "enabled": false
-  },
-
-  "authorizations": {
-    "TD-7F2A91C4": {
-      "enabled": true,
-      "label": "Supervisor PC 1",
-      "expires": null
+  "payload": {
+    "config_version": 2,
+    "master_enabled": true,
+    "rights_management": {
+      "enabled": false
+    },
+    "authorizations": {
+      "TD-7F2A91C4": {
+        "enabled": true,
+        "label": "Supervisor PC 1",
+        "expires": null
+      }
     }
-  }
+  },
+  "signature": "Rouh3RqgdZP5AEnp/g4BfWBefC49JmWFFluvv5GmiM9byNjY5J4EKGslZVjtssIvOfLXokNNvKidS0IB0O4crtsGUxGdazwGHpypTEbjwqMffoPd2Yo14CMdjKChtRD8f7nn0rmJnhL5g3m52gwLS0x/z6qJu4pFW6c+V3V0NLTgmiooMaCJNu9Jj4nMsAf52ZHuQZHREe0M98S9lsgwOvZLA5dLB7z2ZqKBgtVSKjmMOKsN18ytvTliJV6UKZacJVKi0x2x5QArCsLofsE6NdeVy5sJqapdGfWStRPYdGGDYiuBqp5WTqwaP25fqiTKBYJiMBeCMQJ/vU39Sjkp/zL9217OyVSvdoSWdI/0PXmcF6FC13eNAqdyweS2/tgAdkPChMq6HAeRtNGt88AabR3oya/xzYTKvvLQG/bn7yFaB+PyxIRLCZAxzFIgXmUck8DFDic19eSSfnGeVwQnOEERspKxM7KtguMSzXYfkYxhw8wJQtYtbegDPaiCnTiG"
 }
