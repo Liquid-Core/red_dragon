@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#c91620">
+  <title>Fuxi Barcode Camera Test</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #20242c; background: #f4f5f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { background: #c91620; color: #fff; padding: 22px 18px; }
+    header h1 { font-size: 1.35rem; margin: 0; }
+    header small { opacity: .85; }
+    main { max-width: 580px; margin: 18px auto; padding: 0 14px 36px; }
+    .panel { background: white; padding: 18px; border-radius: 14px; box-shadow: 0 2px 12px #18203412; margin-bottom: 14px; }
+    label { font-size: .9rem; font-weight: 650; display: block; margin-bottom: 7px; }
+    .input-row { display: flex; gap: 8px; }
+    input[type=text],select { min-width: 0; flex:1; width:100%; border:1px solid #c9ced6; padding: 12px; border-radius: 9px; font: inherit; background:white; }
+    button { border:0; border-radius:9px; background: #c91620; color:white; font:inherit; font-weight:650; padding: 11px 15px; cursor:pointer; }
+    button.secondary { background: #343c49; }
+    button:disabled { opacity:.52; cursor:default; }
+    .buttons { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+    #reader { width:100%; overflow:hidden; border-radius:12px; background:#111; }
+    #reader video { display:block; width:100% !important; object-fit:cover; }
+    #status { font-size:.9rem; color:#59616c; margin-top:10px; min-height:1.2em; overflow-wrap:anywhere; }
+    #status.error { color:#a1141c; }
+    #history { padding-left: 22px; overflow-wrap:anywhere; }
+    #history li { margin: 8px 0; }
+    .meta { font-size:.77rem; color:#68717e; }
+    .option { display:flex; gap:9px; align-items:center; margin-top:12px; font-size:.9rem; }
+    .option input { width:18px; height:18px; accent-color:#c91620; }
+    .hint { color:#646c77; font-size:.85rem; line-height:1.5; }
+    #cameraRow { margin-top:12px; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <header><h1>Fuxi · Barcode camera test</h1><small>Android / mobile browser scanner demo</small></header>
+  <main>
+    <section class="panel">
+      <label for="barcode">Scanned barcode</label>
+      <div class="input-row">
+        <input id="barcode" type="text" placeholder="Scan or type barcode" autocomplete="off" spellcheck="false">
+        <button id="copyBtn" class="secondary" type="button">Copy</button>
+      </div>
+      <div class="buttons">
+        <button id="startBtn" type="button">📷 Start camera</button>
+        <button id="stopBtn" class="secondary" type="button" disabled>Stop camera</button>
+      </div>
+      <label class="option"><input id="continuous" type="checkbox"> Continuous scanning (keep camera open)</label>
+      <div id="cameraRow" class="hidden">
+        <label for="cameraSelect">Camera</label>
+        <select id="cameraSelect"></select>
+      </div>
+      <p id="status" role="status" aria-live="polite">Ready. Tap “Start camera” to scan.</p>
+    </section>
+    <section class="panel">
+      <div id="reader"></div>
+      <p class="hint">Position the barcode clearly in the camera view. Try a Code 128 warehouse location, EAN-13 product barcode or QR code. Good light and a steady camera help.</p>
+    </section>
+    <section class="panel">
+      <label>Scan history (<span id="count">0</span>)</label>
+      <ol id="history"><li class="meta" id="empty">No scans yet.</li></ol>
+      <button type="button" id="clearBtn" class="secondary">Clear history</button>
+    </section>
+    <p class="hint">All scans stay in this browser page. Nothing is uploaded or saved to a server. GitHub Pages supplies HTTPS, which is required for camera permission.</p>
+  </main>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    const $ = id => document.getElementById(id);
+    const scanner = typeof Html5Qrcode !== 'undefined' ? new Html5Qrcode('reader', {
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.QR_CODE, Html5QrcodeSupportedFormats.DATA_MATRIX,
+        Html5QrcodeSupportedFormats.ITF, Html5QrcodeSupportedFormats.PDF_417
+      ],
+      verbose: false
+    }) : null;
+    let active = false, busy = false, lastCode = '', lastAt = 0;
+    const scans = [];
+    function status(message, error = false) {
+      $('status').textContent = message;
+      $('status').classList.toggle('error', error);
+    }
+    function buttons() {
+      $('startBtn').disabled = busy || active;
+      $('stopBtn').disabled = busy || !active;
+      $('cameraSelect').disabled = busy;
+    }
+    function onScan(code, result) {
+      const now = Date.now();
+      if (code === lastCode && now - lastAt < 1800) return;
+      lastCode = code; lastAt = now;
+      $('barcode').value = code;
+      if (navigator.vibrate) navigator.vibrate(80);
+      scans.unshift({ code, time: new Date().toLocaleTimeString(), format: result?.result?.format?.formatName || 'Barcode' });
+      $('count').textContent = scans.length;
+      $('history').replaceChildren();
+      for (const item of scans) {
+        const li = document.createElement('li');
+        const value = document.createElement('strong');
+        value.textContent = item.code;
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = `${item.time} · ${item.format}`;
+        li.append(value, meta);
+        $('history').append(li);
+      }
+      status(`Scanned: ${code}`);
+      if (!$('continuous').checked) stopCamera();
+    }
+    async function startCamera() {
+      if (active || busy) return;
+      if (!scanner) return status('Scanner library did not load. Check internet connection.', true);
+      busy = true; buttons(); status('Requesting camera access...');
+      try {
+        const selected = $('cameraSelect').value;
+        await scanner.start(
+          selected ? { deviceId: { exact: selected } } : { facingMode: 'environment' },
+          { fps: 12, qrbox: (width, height) => ({ width: Math.min(width - 20, 320), height: Math.min(height - 20, 180) }), aspectRatio: 1.333333 },
+          onScan,
+          () => {}
+        );
+        active = true;
+        status('Camera active. Point it at a barcode.');
+        // Enumerating cameras after permission enables switching between lenses/devices.
+        try {
+          const cameras = await Html5Qrcode.getCameras();
+          $('cameraSelect').replaceChildren();
+          for (const camera of cameras) {
+            const opt = document.createElement('option');
+            opt.value = camera.id; opt.textContent = camera.label || `Camera ${$('cameraSelect').length + 1}`;
+            $('cameraSelect').append(opt);
+          }
+          $('cameraRow').classList.toggle('hidden', cameras.length < 2);
+          if (selected && cameras.some(c => c.id === selected)) $('cameraSelect').value = selected;
+        } catch (e) { /* Back-facing default still works without enumeration. */ }
+      } catch (e) {
+        status(`Could not start camera: ${e?.message || e}. Check camera permission and HTTPS.`, true);
+      } finally { busy = false; buttons(); }
+    }
+    async function stopCamera() {
+      if (!active || busy) return;
+      busy = true; buttons();
+      try { await scanner.stop(); active = false; status('Camera stopped.'); }
+      catch (e) { status(`Stop failed: ${e?.message || e}`, true); }
+      finally { busy = false; buttons(); }
+    }
+    $('startBtn').addEventListener('click', startCamera);
+    $('stopBtn').addEventListener('click', stopCamera);
+    $('cameraSelect').addEventListener('change', async () => {
+      if (active) { await stopCamera(); if (!active) await startCamera(); }
+    });
+    $('clearBtn').addEventListener('click', () => {
+      scans.length = 0; $('count').textContent = '0';
+      $('history').replaceChildren(); const li = document.createElement('li');
+      li.id = 'empty'; li.className = 'meta'; li.textContent = 'No scans yet.'; $('history').append(li);
+    });
+    $('copyBtn').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText($('barcode').value); status('Copied to clipboard.'); }
+      catch { $('barcode').select(); status('Select the text to copy it.'); }
+    });
+    if (!scanner) status('The scanner library could not load. Make sure you have internet.', true);
+  </script>
+</body>
+</html>
+
